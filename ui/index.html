@@ -1,0 +1,1664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KV Store Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3350;
+      --accent: #5b7fff;
+      --accent-dim: #2a3870;
+      --success: #4caf7d;
+      --danger: #ff5c5c;
+      --warn: #f5a623;
+      --purple: #c084fc;
+      --text: #e2e6f0;
+      --text-muted: #7a829e;
+      --radius: 8px;
+      --mono: "SF Mono","Fira Code","Consolas",monospace;
+    }
+
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 18px; border-bottom: 1px solid var(--border);
+      background: var(--surface); position: sticky; top: 0; z-index: 50;
+      flex-wrap: wrap;
+    }
+    .logo { font-size: 1rem; font-weight: 700; letter-spacing: .4px; white-space: nowrap; }
+    .logo span { color: var(--accent); }
+
+    /* ── Page nav ── */
+    .page-nav { display: flex; gap: 2px; flex-wrap: wrap; }
+    .page-nav button {
+      padding: 5px 11px; font-size: .77rem; font-weight: 600; cursor: pointer;
+      border: 1px solid var(--border); border-radius: 6px;
+      background: transparent; color: var(--text-muted); transition: all .15s;
+    }
+    .page-nav button:hover { color: var(--text); border-color: var(--text-muted); }
+    .page-nav button.active               { background: var(--accent);  border-color: var(--accent);  color: #fff; }
+    .page-nav button.nav-write.active     { background: var(--warn);    border-color: var(--warn);    color: #fff; }
+    .page-nav button.nav-read.active      { background: var(--success); border-color: var(--success); color: #fff; }
+    .page-nav button.nav-get.active       { background: var(--purple);  border-color: var(--purple);  color: #fff; }
+    .page-nav button.nav-add.active       { background: #2ec4b6;        border-color: #2ec4b6;        color: #fff; }
+    .page-nav button.nav-control.active   { background: var(--danger);  border-color: var(--danger);  color: #fff; }
+
+    .node-switcher {
+      display: flex; align-items: center; gap: 7px; flex: 1; min-width: 200px;
+    }
+    .node-switcher label { font-size: .74rem; color: var(--text-muted); white-space: nowrap; }
+    .node-switcher input {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 5px 9px;
+      font-size: .82rem; font-family: var(--mono); outline: none; transition: border-color .2s;
+    }
+    .node-switcher input:focus { border-color: var(--accent); }
+    .node-switcher button {
+      padding: 5px 11px; font-size: .78rem; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); cursor: pointer;
+    }
+    .node-switcher button:hover { color: var(--text); }
+    .node-badge { display: flex; align-items: center; gap: 7px; font-size: .82rem; color: var(--text-muted); white-space: nowrap; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #444; transition: background .3s; flex-shrink: 0; }
+    .dot.online  { background: var(--success); box-shadow: 0 0 5px var(--success); }
+    .dot.offline { background: var(--danger); }
+
+    /* ── Page wrapper ── */
+    .page-content { max-width: 1140px; margin: 0 auto; padding: 24px 20px 60px; }
+
+    .section-title {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;
+      color: var(--text-muted); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Stats ── */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 24px; }
+    @media (max-width: 700px) { .stats { grid-template-columns: 1fr 1fr; } }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+    .card-label {
+      font-size: .7rem; text-transform: uppercase; letter-spacing: .8px;
+      color: var(--text-muted); margin-bottom: 8px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .card-value { font-size: 1.6rem; font-weight: 700; }
+    .card-value-row { display: flex; align-items: baseline; gap: 8px; }
+    .compact-btn {
+      font-size: .66rem; padding: 2px 8px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted);
+      cursor: pointer; transition: all .15s; font-weight: 600; white-space: nowrap;
+    }
+    .compact-btn:hover { border-color: var(--warn); color: var(--warn); }
+    .tip { position: relative; display: inline-flex; }
+    .tip-icon { width: 13px; height: 13px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); font-size: .6rem; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: default; }
+    .tip-box { display: none; position: absolute; bottom: calc(100% + 7px); left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; width: 260px; font-size: .76rem; line-height: 1.5; color: var(--text); z-index: 99; pointer-events: none; }
+    .tip:hover .tip-box { display: block; }
+
+    /* ── Cluster ── */
+    .cluster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .node-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px 14px; position: relative;
+      text-decoration: none; color: inherit; display: block; transition: border-color .15s;
+    }
+    a.node-card:hover { border-color: var(--accent); }
+    .node-card.current { border-color: var(--accent-dim); }
+    .this-badge { position: absolute; top: 8px; right: 8px; font-size: .6rem; background: var(--accent-dim); color: var(--accent); padding: 2px 6px; border-radius: 4px; font-weight: 700; }
+    .node-card-id { font-size: .72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .node-card-addr { font-family: var(--mono); font-size: .8rem; margin-bottom: 8px; }
+    .node-status { display: flex; align-items: center; gap: 6px; font-size: .78rem; }
+    .quorum-row { display: flex; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .qb { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .qb-val { font-size: 1rem; font-weight: 700; color: var(--accent); }
+    .qb-lbl { font-size: .6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ── Quorum settings ── */
+    .quorum-settings {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px 20px; margin-bottom: 24px;
+      display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;
+    }
+    .q-field { display: flex; flex-direction: column; gap: 5px; }
+    .q-field label { font-size: .68rem; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); }
+    .q-display { font-size: 1.5rem; font-weight: 700; color: var(--text); min-width: 36px; }
+    .q-input {
+      width: 72px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 7px 10px;
+      font-size: 1rem; font-weight: 700; font-family: var(--mono);
+      outline: none; transition: border-color .2s; text-align: center;
+    }
+    .q-input:focus { border-color: var(--accent); }
+    .q-sep { font-size: 1.2rem; color: var(--border); padding-bottom: 6px; }
+    .q-hint { font-size: .72rem; color: var(--text-muted); flex: 1; min-width: 180px; line-height: 1.6; }
+
+    /* ── Flow nav cards ── */
+    .flow-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+    @media (max-width: 520px) { .flow-nav { grid-template-columns: 1fr; } }
+    .flow-nav-card {
+      border-radius: var(--radius); padding: 18px 20px; cursor: pointer;
+      border: 1.5px solid var(--border); background: var(--surface);
+      text-align: center; transition: border-color .2s, background .2s, transform .12s;
+      text-decoration: none; color: inherit; display: block;
+    }
+    .flow-nav-card:hover { transform: translateY(-2px); }
+    .flow-nav-card.write-card:hover { border-color: var(--warn);    background: rgba(245,166,35,.06); }
+    .flow-nav-card.read-card:hover  { border-color: var(--success); background: rgba(76,175,125,.06); }
+    .flow-nav-icon { font-size: 1.8rem; margin-bottom: 7px; }
+    .flow-nav-title { font-size: .95rem; font-weight: 700; margin-bottom: 3px; }
+    .flow-nav-sub { font-size: .76rem; color: var(--text-muted); }
+    .flow-nav-card.write-card .flow-nav-title { color: var(--warn); }
+    .flow-nav-card.read-card  .flow-nav-title { color: var(--success); }
+
+    /* ── Animated flow ── */
+    .a-stage { display: flex; align-items: center; min-width: 560px; }
+    .a-step  { display: flex; flex-direction: column; align-items: center; flex: 1; }
+    .a-box {
+      width: 100%; padding: 12px 10px; border-radius: 8px; text-align: center;
+      background: var(--surface2); border: 1.5px solid var(--border);
+      min-height: 72px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 3px;
+      transition: border-color .3s, background .3s, box-shadow .3s;
+    }
+    .a-icon { font-size: 1.2rem; line-height: 1; }
+    .a-lbl  { font-size: .78rem; font-weight: 700; transition: color .3s; }
+    .a-sub  { font-size: .65rem; color: var(--text-muted); line-height: 1.4; }
+    .a-num  { font-size: .58rem; color: var(--text-muted); margin-top: 5px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+
+    .a-step[data-c="warn"]    .a-box.lit { border-color: var(--warn);    background: rgba(245,166,35,.08);  box-shadow: 0 0 14px rgba(245,166,35,.22);  }
+    .a-step[data-c="warn"]    .a-box.lit .a-lbl { color: var(--warn);    }
+    .a-step[data-c="success"] .a-box.lit { border-color: var(--success); background: rgba(76,175,125,.08);  box-shadow: 0 0 14px rgba(76,175,125,.22);  }
+    .a-step[data-c="success"] .a-box.lit .a-lbl { color: var(--success); }
+    .a-step[data-c="accent"]  .a-box.lit { border-color: var(--accent);  background: rgba(91,127,255,.08);  box-shadow: 0 0 14px rgba(91,127,255,.22);  }
+    .a-step[data-c="accent"]  .a-box.lit .a-lbl { color: var(--accent);  }
+    .a-step[data-c="purple"]  .a-box.lit { border-color: var(--purple);  background: rgba(192,132,252,.08); box-shadow: 0 0 14px rgba(192,132,252,.22); }
+    .a-step[data-c="purple"]  .a-box.lit .a-lbl { color: var(--purple);  }
+
+    .a-conn { position: relative; flex: 0 0 28px; height: 72px; display: flex; align-items: center; justify-content: center; }
+    .a-line { width: 100%; height: 2px; background: var(--border); border-radius: 1px; }
+    .a-pkt {
+      position: absolute; width: 9px; height: 9px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 7px var(--accent);
+      top: 50%; left: -4.5px; transform: translateY(-50%);
+      opacity: 0; transition: left .38s ease-in-out, opacity .15s; pointer-events: none;
+    }
+    .a-pkt.fly { left: calc(100% + 4.5px); opacity: 1; }
+
+    .flow-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .li { display: flex; align-items: flex-start; gap: 7px; flex: 1; min-width: 170px; }
+    .li-n { width: 18px; height: 18px; border-radius: 50%; background: var(--surface2); border: 1px solid var(--border); font-size: .65rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--text-muted); }
+    .li-t { font-size: .75rem; color: var(--text-muted); line-height: 1.5; }
+    .li-t strong { color: var(--text); }
+
+    /* ── Flow full page ── */
+    .flow-page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+    }
+    .flow-page-title { font-size: 1.5rem; font-weight: 700; }
+    .flow-page-title.write { color: var(--warn); }
+    .flow-page-title.read  { color: var(--success); }
+    .flow-page-subtitle { font-size: .84rem; color: var(--text-muted); margin-top: 3px; }
+    .flow-wrap-full {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 28px 20px; overflow-x: auto;
+    }
+    .anim-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .anim-status { font-size: .78rem; color: var(--text-muted); font-family: var(--mono); }
+
+    /* ── Stress test ── */
+    .stress-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+    @media (max-width: 640px) { .stress-grid { grid-template-columns: 1fr; } }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+    .panel-title { font-size: .82rem; font-weight: 700; margin-bottom: 14px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .6px; }
+    .ctrl-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+    .ctrl-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 100px; }
+    .ctrl-field label { font-size: .7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+    .ctrl-field input {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); padding: 7px 10px; font-size: .85rem; font-family: var(--mono); outline: none; transition: border-color .2s;
+    }
+    .ctrl-field input:focus { border-color: var(--accent); }
+    .progress-bar-wrap { background: var(--bg); border-radius: 4px; height: 6px; margin: 10px 0; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 4px; width: 0%; transition: width .1s; }
+    .progress-label { font-size: .75rem; color: var(--text-muted); margin-bottom: 4px; }
+    .result-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .8rem; }
+    .result-table th { text-align: left; padding: 6px 8px; color: var(--text-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .6px; border-bottom: 1px solid var(--border); }
+    .result-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); font-family: var(--mono); }
+    .result-table tr:last-child td { border-bottom: none; }
+    .result-table .val { color: var(--accent); font-weight: 600; }
+    #stress-log { font-size: .75rem; color: var(--text-muted); margin-top: 8px; min-height: 20px; font-family: var(--mono); }
+
+    /* ── Get page ── */
+    .get-page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    .get-page-title { font-size: 1.5rem; font-weight: 700; color: var(--purple); }
+    .get-page-subtitle { font-size: .84rem; color: var(--text-muted); margin-top: 3px; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+    input[type="search"] { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); padding: 8px 12px; font-size: .88rem; outline: none; transition: border-color .2s; }
+    input[type="search"]:focus { border-color: var(--purple); }
+    input[type="search"]::placeholder { color: var(--text-muted); }
+    .detail-panel { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 12px; }
+    .detail-panel.open { display: block; }
+    .detail-lbl { font-size: .68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .detail-key { font-family: var(--mono); color: var(--purple); margin-bottom: 5px; font-size: .9rem; font-weight: 700; }
+    .detail-val { font-family: var(--mono); font-size: .82rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; white-space: pre-wrap; word-break: break-all; max-height: 160px; overflow-y: auto; }
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 14px; font-size: .68rem; text-transform: uppercase; letter-spacing: .6px; color: var(--text-muted); background: var(--surface2); border-bottom: 1px solid var(--border); }
+    td { padding: 9px 14px; font-size: .86rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+    .key-cell { font-family: var(--mono); color: var(--purple); }
+    .val-cell { font-family: var(--mono); font-size: .8rem; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+    .actions { display: flex; gap: 5px; justify-content: flex-end; }
+    .empty { text-align: center; padding: 44px 0; color: var(--text-muted); }
+
+    /* ── Add page ── */
+    .add-page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+    .add-page-title { font-size: 1.5rem; font-weight: 700; color: #2ec4b6; }
+    .add-page-subtitle { font-size: .84rem; color: var(--text-muted); margin-top: 3px; }
+    .add-form-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; max-width: 640px; }
+    .add-form-editing { border-color: #2ec4b6; }
+    .form-field { margin-bottom: 16px; }
+    .form-label { display: block; font-size: .72rem; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+    .form-input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); padding: 10px 13px;
+      font-size: .92rem; font-family: var(--mono); outline: none; resize: vertical;
+      transition: border-color .2s;
+    }
+    .form-input:focus { border-color: #2ec4b6; }
+    .form-input:disabled { opacity: .5; cursor: not-allowed; }
+    .form-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .add-editing-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(46,196,182,.12); border: 1px solid #2ec4b6;
+      color: #2ec4b6; border-radius: 6px; padding: 4px 10px;
+      font-size: .76rem; font-weight: 700; margin-bottom: 14px;
+    }
+
+    /* ── Buttons ── */
+    button { cursor: pointer; border: none; border-radius: var(--radius); font-size: .85rem; font-weight: 600; padding: 8px 16px; transition: background .15s, transform .1s; }
+    button:active { transform: scale(.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #7b97ff; }
+    .btn-primary:disabled { background: var(--accent-dim); cursor: not-allowed; opacity: .7; }
+    .btn-teal { background: #2ec4b6; color: #fff; }
+    .btn-teal:hover { background: #3dd9ca; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #ff7b7b; }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { color: var(--text); }
+    .btn-sm { padding: 4px 10px; font-size: .76rem; }
+
+    /* ── Control page ── */
+    .ctrl-banner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 12px 18px; margin-bottom: 20px; }
+    .ctrl-banner-stat { display: flex; flex-direction: column; gap: 2px; }
+    .ctrl-banner-val { font-size: 1.1rem; font-weight: 700; }
+    .ctrl-banner-lbl { font-size: .65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+    .ctrl-banner-sep { width: 1px; height: 32px; background: var(--border); }
+    .ctrl-banner-alert { margin-left: auto; font-size: .8rem; font-weight: 600; padding: 5px 12px;
+      border-radius: 6px; border: 1px solid; }
+    .ctrl-banner-alert.warn { color: var(--warn); border-color: var(--warn); background: rgba(245,166,35,.08); }
+    .ctrl-banner-alert.ok   { color: var(--success); border-color: var(--success); background: rgba(76,175,125,.08); }
+
+    .ctrl-top { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+    @media (max-width: 760px) { .ctrl-top { grid-template-columns: 1fr; } }
+
+    /* Operation panel */
+    .op-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .op-tabs { display: flex; gap: 4px; }
+    .op-tab { padding: 6px 14px; border-radius: 6px; font-size: .8rem; font-weight: 700; cursor: pointer;
+      border: 1px solid var(--border); background: transparent; color: var(--text-muted); transition: all .15s; }
+    .op-tab:hover { color: var(--text); }
+    .op-tab.active[data-op="GET"]    { background: var(--success); border-color: var(--success); color: #fff; }
+    .op-tab.active[data-op="PUT"]    { background: var(--warn);    border-color: var(--warn);    color: #fff; }
+    .op-tab.active[data-op="DELETE"] { background: var(--danger);  border-color: var(--danger);  color: #fff; }
+    .op-field-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .op-input {
+      flex: 1; min-width: 120px; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 9px 12px; font-size: .88rem;
+      font-family: var(--mono); outline: none; transition: border-color .2s;
+    }
+    .op-input:focus { border-color: var(--accent); }
+    .op-node-select {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); padding: 9px 10px; font-size: .84rem; outline: none; cursor: pointer;
+      font-family: var(--mono); transition: border-color .2s;
+    }
+    .op-node-select:focus { border-color: var(--accent); }
+    .op-result-box {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+      padding: 11px 14px; font-size: .82rem; font-family: var(--mono);
+      min-height: 60px; white-space: pre-wrap; word-break: break-all; transition: border-color .3s;
+    }
+    .op-result-box.ok  { border-color: var(--success); }
+    .op-result-box.err { border-color: var(--danger); }
+    .op-meta { display: flex; align-items: center; gap: 10px; font-size: .72rem; color: var(--text-muted); }
+    .op-badge { padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: .72rem; }
+    .op-badge.ok  { background: rgba(76,175,125,.15);  color: var(--success); }
+    .op-badge.err { background: rgba(255,92,92,.15);   color: var(--danger);  }
+
+    /* Activity log */
+    .activity-log { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; display: flex; flex-direction: column; overflow: hidden; }
+    .log-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .log-title { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--text-muted); }
+    .log-entries { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; max-height: 280px; }
+    .log-entry { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 5px; font-size: .77rem; font-family: var(--mono); background: var(--surface2); }
+    .log-entry.ok    { border-left: 2px solid var(--success); }
+    .log-entry.err   { border-left: 2px solid var(--danger);  }
+    .log-entry.kill  { border-left: 2px solid var(--danger);  background: rgba(255,92,92,.07); }
+    .log-entry.info  { border-left: 2px solid var(--accent);  }
+    .log-time  { color: var(--text-muted); flex-shrink: 0; font-size: .7rem; }
+    .log-op    { font-weight: 700; flex-shrink: 0; min-width: 46px; }
+    .log-op.GET    { color: var(--success); }
+    .log-op.PUT    { color: var(--warn);    }
+    .log-op.DELETE { color: var(--danger);  }
+    .log-op.KILL   { color: var(--danger);  }
+    .log-op.INFO   { color: var(--accent);  }
+    .log-key   { color: var(--accent); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .log-node  { color: var(--text-muted); font-size: .7rem; flex-shrink: 0; }
+    .log-status { flex-shrink: 0; }
+
+    /* Control node cards */
+    .ctrl-nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 12px; }
+    .ctrl-node-card {
+      background: var(--surface); border: 1.5px solid var(--border);
+      border-radius: var(--radius); padding: 16px; position: relative;
+      transition: border-color .3s;
+    }
+    .ctrl-node-card.alive { border-color: rgba(76,175,125,.35); }
+    .ctrl-node-card.dead  { border-color: rgba(255,92,92,.35); background: rgba(255,92,92,.03); }
+    .ctrl-node-card.selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .cn-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .cn-id { font-size: .9rem; font-weight: 700; }
+    .cn-status-text { font-size: .72rem; font-weight: 700; margin-left: auto; padding: 2px 8px; border-radius: 4px; }
+    .cn-status-text.alive { background: rgba(76,175,125,.15);  color: var(--success); }
+    .cn-status-text.dead  { background: rgba(255,92,92,.15);   color: var(--danger);  }
+    .cn-url { font-family: var(--mono); font-size: .78rem; color: var(--text-muted); margin-bottom: 12px; }
+    .cn-stats { display: flex; gap: 16px; margin-bottom: 14px; padding: 8px 10px; background: var(--surface2); border-radius: 6px; }
+    .cn-stat { display: flex; flex-direction: column; gap: 2px; }
+    .cn-stat-val { font-size: .92rem; font-weight: 700; font-family: var(--mono); }
+    .cn-stat-lbl { font-size: .6rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+    .cn-actions { display: flex; gap: 8px; }
+    .cn-restart-box { font-size: .73rem; color: var(--text-muted); margin-top: 12px; padding: 8px 10px; background: var(--surface2); border-radius: 6px; line-height: 1.6; }
+    .cn-restart-cmd { font-family: var(--mono); font-size: .7rem; color: var(--warn); word-break: break-all; margin-top: 4px; }
+
+    /* ── Toast ── */
+    #toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; font-size: .83rem; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 200; }
+    #toast.show { opacity: 1; }
+    #toast.ok  { border-left: 3px solid var(--success); }
+    #toast.err { border-left: 3px solid var(--danger); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">KV<span>Store</span></div>
+
+  <nav class="page-nav">
+    <button id="nav-dashboard" class="active"    onclick="navigate('#')">Dashboard</button>
+    <button id="nav-write"     class="nav-write" onclick="navigate('#write')">▶ Write</button>
+    <button id="nav-read"      class="nav-read"  onclick="navigate('#read')">▶ Read</button>
+    <button id="nav-get"       class="nav-get"   onclick="navigate('#get')">Get Key</button>
+    <button id="nav-add"       class="nav-add"     onclick="navigate('#add')">Add Key</button>
+    <button id="nav-control"   class="nav-control" onclick="navigate('#control')">⚡ Control</button>
+  </nav>
+
+  <div class="node-switcher">
+    <label>Node</label>
+    <input type="text" id="node-url-input" placeholder="http://localhost:8100" />
+    <button onclick="switchNode()">Connect</button>
+  </div>
+
+  <div class="node-badge">
+    <span class="dot" id="status-dot"></span>
+    <span id="node-label">connecting…</span>
+  </div>
+</header>
+
+<!-- ════════════════════════════════ DASHBOARD ════════════════════════════════ -->
+<div id="page-dashboard">
+<div class="page-content">
+
+  <!-- Stats -->
+  <div class="stats">
+    <div class="card">
+      <div class="card-label">Status</div>
+      <div class="card-value" id="stat-status" style="font-size:1rem;margin-top:4px;color:var(--text-muted)">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Live Keys</div>
+      <div class="card-value" id="stat-keys" style="color:var(--accent)">—</div>
+    </div>
+    <div class="card">
+      <div class="card-label">
+        WAL LSN
+        <span class="tip">
+          <span class="tip-icon">?</span>
+          <span class="tip-box">
+            <strong>Write-Ahead Log · Log Sequence Number</strong><br><br>
+            Every PUT/DELETE is fsynced to WAL before touching memory. LSN monotonically increments with each write.<br><br>
+            <em>Clear WAL</em> creates a snapshot of current state and purges old WAL segments, freeing disk space.
+          </span>
+        </span>
+      </div>
+      <div class="card-value-row">
+        <div class="card-value" id="stat-lsn">—</div>
+        <button class="compact-btn" onclick="clearWAL()" title="Snapshot + purge old WAL segments">Clear WAL</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-label">Nodes Online</div>
+      <div class="card-value" id="stat-nodes">—</div>
+    </div>
+  </div>
+
+  <!-- Cluster -->
+  <div class="section-title">Cluster</div>
+  <div class="cluster-grid" id="cluster-grid">
+    <div class="node-card" style="color:var(--text-muted);font-size:.82rem">Loading…</div>
+  </div>
+
+  <!-- Quorum Settings -->
+  <div class="section-title">Quorum Settings</div>
+  <div class="quorum-settings">
+    <div class="q-field">
+      <label>N — Nodes</label>
+      <div class="q-display" id="q-n">—</div>
+    </div>
+    <div class="q-sep">/</div>
+    <div class="q-field">
+      <label>W — Write Quorum</label>
+      <input class="q-input" type="number" id="q-w" min="1" max="9" value="2" />
+    </div>
+    <div class="q-sep">/</div>
+    <div class="q-field">
+      <label>R — Read Quorum</label>
+      <input class="q-input" type="number" id="q-r" min="1" max="9" value="2" />
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn-primary btn-sm" onclick="applyQuorum()">Apply</button>
+      <div id="q-status" style="font-size:.72rem;color:var(--text-muted)">R + W &gt; N guarantees consistency</div>
+    </div>
+    <div class="q-hint">
+      <strong>R + W must be &gt; N.</strong><br>
+      Higher W = safer writes, slower. Higher R = fresher reads, slower.<br>
+      Default for N=3: W=2, R=2 — tolerates 1 failure.
+    </div>
+  </div>
+
+  <!-- Data flow navigation -->
+  <div class="section-title">How Data Flows</div>
+  <div class="flow-nav">
+    <a class="flow-nav-card write-card" href="#write" onclick="navigate('#write')">
+      <div class="flow-nav-icon">📤</div>
+      <div class="flow-nav-title">Write Flow</div>
+      <div class="flow-nav-sub">WAL → MemTable → Replication → Quorum → ACK</div>
+    </a>
+    <a class="flow-nav-card read-card" href="#read" onclick="navigate('#read')">
+      <div class="flow-nav-icon">🔍</div>
+      <div class="flow-nav-title">Read Flow</div>
+      <div class="flow-nav-sub">Local Lookup → Peer Reads → Quorum → LWW → Return</div>
+    </a>
+  </div>
+
+  <!-- Stress test -->
+  <div class="section-title">Stress Test</div>
+  <div class="stress-grid">
+    <div class="panel">
+      <div class="panel-title">Configuration</div>
+      <div class="ctrl-row">
+        <div class="ctrl-field">
+          <label>Keys to write</label>
+          <input type="number" id="st-keys" value="1000" min="1" max="50000" />
+        </div>
+        <div class="ctrl-field">
+          <label>Concurrency</label>
+          <input type="number" id="st-conc" value="20" min="1" max="100" />
+        </div>
+      </div>
+      <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-primary" id="st-run-btn" onclick="runStressTest()">▶ Run</button>
+        <button class="btn-ghost btn-sm" onclick="clearStressKeys()" style="margin-top:auto">Clear stress keys</button>
+      </div>
+      <div style="margin-top:14px">
+        <div class="progress-label" id="st-phase">—</div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="st-bar"></div></div>
+        <div id="stress-log">Ready.</div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Results</div>
+      <table class="result-table">
+        <thead><tr><th>Metric</th><th>Write</th><th>Read</th></tr></thead>
+        <tbody id="result-tbody">
+          <tr><td colspan="3" style="color:var(--text-muted);font-size:.8rem;padding:16px 8px">Run a test to see results.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════ WRITE FLOW ════════════════════════════════ -->
+<div id="page-write" style="display:none">
+<div class="page-content">
+  <div class="flow-page-header">
+    <div>
+      <div class="flow-page-title write">Write Flow — PUT</div>
+      <div class="flow-page-subtitle">How a key-value pair is durably written and replicated across the cluster</div>
+    </div>
+    <button class="btn-ghost" onclick="navigate('#')">← Dashboard</button>
+  </div>
+  <div class="flow-wrap-full">
+    <div class="anim-controls">
+      <button class="btn-ghost btn-sm" onclick="startAnim('write')">▶ Replay</button>
+      <span class="anim-status" id="anim-write-status"></span>
+    </div>
+    <div class="a-stage">
+      <div class="a-step" data-c="warn">
+        <div class="a-box" id="aw-0"><div class="a-icon">📤</div><div class="a-lbl">Client</div><div class="a-sub">PUT key=foo<br>value=bar</div></div>
+        <div class="a-num">start</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="awp-0"></div></div>
+      <div class="a-step" data-c="success">
+        <div class="a-box" id="aw-1"><div class="a-icon">💾</div><div class="a-lbl">WAL</div><div class="a-sub">LSN + HLC<br>fsync disk</div></div>
+        <div class="a-num">step 1</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="awp-1"></div></div>
+      <div class="a-step" data-c="accent">
+        <div class="a-box" id="aw-2"><div class="a-icon">⚡</div><div class="a-lbl">MemTable</div><div class="a-sub">RAM update<br>key → value</div></div>
+        <div class="a-num">step 2</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="awp-2"></div></div>
+      <div class="a-step" data-c="purple">
+        <div class="a-box" id="aw-3"><div class="a-icon">📡</div><div class="a-lbl">Replicate</div><div class="a-sub">TCP → all peers<br>in parallel</div></div>
+        <div class="a-num">step 3</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="awp-3"></div></div>
+      <div class="a-step" data-c="warn">
+        <div class="a-box" id="aw-4"><div class="a-icon">✓✓</div><div class="a-lbl">Quorum</div><div class="a-sub">wait W ACKs<br>local + peers</div></div>
+        <div class="a-num">step 4</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="awp-4"></div></div>
+      <div class="a-step" data-c="success">
+        <div class="a-box" id="aw-5"><div class="a-icon">✅</div><div class="a-lbl">OK</div><div class="a-sub">200 response<br>to client</div></div>
+        <div class="a-num">done</div>
+      </div>
+    </div>
+    <div class="flow-legend">
+      <div class="li"><div class="li-n">1</div><div class="li-t"><strong>WAL first, always.</strong> Entry is fsynced to disk before anything else. If the node crashes right here, nothing is lost — WAL replays on restart.</div></div>
+      <div class="li"><div class="li-n">2</div><div class="li-t"><strong>MemTable.</strong> Value goes into RAM for fast reads. The HLC timestamp enables Last-Writer-Wins conflict resolution across all nodes.</div></div>
+      <div class="li"><div class="li-n">3</div><div class="li-t"><strong>Parallel replication.</strong> All peers get the entry simultaneously over TCP. One slow peer doesn't delay the rest.</div></div>
+      <div class="li"><div class="li-n">4</div><div class="li-t"><strong>Quorum.</strong> With N=3 W=2, the local write counts as 1 — only 1 remote ACK needed. Succeeds even if one peer is down.</div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ════════════════════════════════ READ FLOW ════════════════════════════════ -->
+<div id="page-read" style="display:none">
+<div class="page-content">
+  <div class="flow-page-header">
+    <div>
+      <div class="flow-page-title read">Read Flow — GET</div>
+      <div class="flow-page-subtitle">How the freshest value is located and returned with quorum consistency</div>
+    </div>
+    <button class="btn-ghost" onclick="navigate('#')">← Dashboard</button>
+  </div>
+  <div class="flow-wrap-full">
+    <div class="anim-controls">
+      <button class="btn-ghost btn-sm" onclick="startAnim('read')">▶ Replay</button>
+      <span class="anim-status" id="anim-read-status"></span>
+    </div>
+    <div class="a-stage">
+      <div class="a-step" data-c="warn">
+        <div class="a-box" id="ar-0"><div class="a-icon">🔍</div><div class="a-lbl">Client</div><div class="a-sub">GET key=foo</div></div>
+        <div class="a-num">start</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="arp-0"></div></div>
+      <div class="a-step" data-c="accent">
+        <div class="a-box" id="ar-1"><div class="a-icon">⚡</div><div class="a-lbl">Local Read</div><div class="a-sub">own MemTable<br>O(1) lookup</div></div>
+        <div class="a-num">step 1</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="arp-1"></div></div>
+      <div class="a-step" data-c="purple">
+        <div class="a-box" id="ar-2"><div class="a-icon">📡</div><div class="a-lbl">Peer Reads</div><div class="a-sub">parallel TCP<br>READ_REQUEST</div></div>
+        <div class="a-num">step 2</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="arp-2"></div></div>
+      <div class="a-step" data-c="warn">
+        <div class="a-box" id="ar-3"><div class="a-icon">✓✓</div><div class="a-lbl">Quorum</div><div class="a-sub">wait R total<br>responses</div></div>
+        <div class="a-num">step 3</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="arp-3"></div></div>
+      <div class="a-step" data-c="success">
+        <div class="a-box" id="ar-4"><div class="a-icon">🏆</div><div class="a-lbl">Pick Winner</div><div class="a-sub">highest HLC<br>Last-Writer-Wins</div></div>
+        <div class="a-num">step 4</div>
+      </div>
+      <div class="a-conn"><div class="a-line"></div><div class="a-pkt" id="arp-4"></div></div>
+      <div class="a-step" data-c="success">
+        <div class="a-box" id="ar-5"><div class="a-icon">✅</div><div class="a-lbl">Return</div><div class="a-sub">value to<br>client</div></div>
+        <div class="a-num">done</div>
+      </div>
+    </div>
+    <div class="flow-legend">
+      <div class="li"><div class="li-n">1</div><div class="li-t"><strong>Free local read.</strong> Reading own MemTable is O(1) in RAM and counts toward the R quorum — no extra network hop.</div></div>
+      <div class="li"><div class="li-n">2</div><div class="li-t"><strong>Ask peers in parallel.</strong> Only R−1 remote responses needed since local counts as 1.</div></div>
+      <div class="li"><div class="li-n">3</div><div class="li-t"><strong>R + W &gt; N guarantee.</strong> R=2, W=2, N=3 → every read quorum overlaps every write quorum, so you always see the latest write.</div></div>
+      <div class="li"><div class="li-n">4</div><div class="li-t"><strong>Read repair.</strong> If any peer returned a stale value, the coordinator silently pushes the fresh value to it in the background.</div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═════════════════════════════════ GET KEY ═════════════════════════════════ -->
+<div id="page-get" style="display:none">
+<div class="page-content">
+  <div class="get-page-header">
+    <div>
+      <div class="get-page-title">Get Key</div>
+      <div class="get-page-subtitle">Browse, search, and inspect keys in the cluster</div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost" onclick="navigate('#')">← Dashboard</button>
+      <button class="btn-ghost" onclick="fetchKeys()">⟳ Refresh</button>
+    </div>
+  </div>
+
+  <div id="get-detail" class="detail-panel">
+    <div class="detail-lbl">Selected Key</div>
+    <div id="get-detail-key" class="detail-key"></div>
+    <div id="get-detail-val" class="detail-val"></div>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button class="btn-ghost btn-sm" onclick="goEditKey()">Edit this key</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Filter keys…" oninput="renderTable()" />
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Key</th>
+          <th>Value preview</th>
+          <th style="text-align:right">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ═════════════════════════════════ ADD KEY ═════════════════════════════════ -->
+<div id="page-add" style="display:none">
+<div class="page-content">
+  <div class="add-page-header">
+    <div>
+      <div class="add-page-title" id="add-page-title">Add Key</div>
+      <div class="add-page-subtitle" id="add-page-subtitle">Write a new key-value pair to the cluster</div>
+    </div>
+    <button class="btn-ghost" onclick="navigate('#get')">← Get Keys</button>
+  </div>
+
+  <div class="add-form-wrap" id="add-form-wrap">
+    <div id="add-editing-badge" class="add-editing-badge" style="display:none">
+      ✏ Editing existing key
+    </div>
+    <div class="form-field">
+      <label class="form-label" for="add-key">Key</label>
+      <input class="form-input" type="text" id="add-key" placeholder="my-key" autocomplete="off" />
+    </div>
+    <div class="form-field">
+      <label class="form-label" for="add-val">Value</label>
+      <textarea class="form-input" id="add-val" rows="6" placeholder="my-value"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn-teal" onclick="saveAddKey()">Save</button>
+      <button class="btn-ghost" onclick="resetAddForm()">Clear</button>
+    </div>
+    <div id="add-status" style="margin-top:12px;font-size:.78rem;min-height:18px"></div>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════ CONTROL PAGE ══════════════════════════════ -->
+<div id="page-control" style="display:none">
+<div class="page-content">
+
+  <!-- Banner: cluster summary -->
+  <div class="ctrl-banner" id="ctrl-banner">
+    <div class="ctrl-banner-stat">
+      <div class="ctrl-banner-val" id="cb-nodes">—</div>
+      <div class="ctrl-banner-lbl">Nodes online</div>
+    </div>
+    <div class="ctrl-banner-sep"></div>
+    <div class="ctrl-banner-stat">
+      <div class="ctrl-banner-val" id="cb-n">—</div>
+      <div class="ctrl-banner-lbl">N (total)</div>
+    </div>
+    <div class="ctrl-banner-stat">
+      <div class="ctrl-banner-val" id="cb-w">—</div>
+      <div class="ctrl-banner-lbl">W (write quorum)</div>
+    </div>
+    <div class="ctrl-banner-stat">
+      <div class="ctrl-banner-val" id="cb-r">—</div>
+      <div class="ctrl-banner-lbl">R (read quorum)</div>
+    </div>
+    <div class="ctrl-banner-sep"></div>
+    <div class="ctrl-banner-stat">
+      <div class="ctrl-banner-val" id="cb-keys">—</div>
+      <div class="ctrl-banner-lbl">Keys (this node)</div>
+    </div>
+    <div id="cb-alert" class="ctrl-banner-alert ok">● Cluster healthy</div>
+  </div>
+
+  <!-- Top row: operation panel + activity log -->
+  <div class="ctrl-top">
+
+    <!-- Operation panel -->
+    <div class="op-panel">
+      <div style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted);margin-bottom:4px">Operation</div>
+      <div class="op-tabs">
+        <button class="op-tab active" data-op="GET"    onclick="setOp('GET')">GET</button>
+        <button class="op-tab"        data-op="PUT"    onclick="setOp('PUT')">PUT</button>
+        <button class="op-tab"        data-op="DELETE" onclick="setOp('DELETE')">DELETE</button>
+      </div>
+      <div class="op-field-row">
+        <input class="op-input" id="op-key" placeholder="key" autocomplete="off" />
+        <input class="op-input" id="op-val" placeholder="value (PUT only)" style="display:none" />
+      </div>
+      <div class="op-field-row">
+        <select class="op-node-select" id="op-node" style="flex:1"></select>
+        <button class="btn-primary" onclick="executeOp()">▶ Execute</button>
+      </div>
+      <div>
+        <div class="op-meta" id="op-meta" style="margin-bottom:6px;display:none">
+          <span class="op-badge" id="op-badge"></span>
+          <span id="op-latency"></span>
+          <span id="op-node-label"></span>
+        </div>
+        <div class="op-result-box" id="op-result">Ready — enter a key and execute.</div>
+      </div>
+    </div>
+
+    <!-- Activity log -->
+    <div class="activity-log">
+      <div class="log-header">
+        <div class="log-title">Activity Log</div>
+        <button class="btn-ghost btn-sm" onclick="ctrlLog=[]; renderLog()">Clear</button>
+      </div>
+      <div class="log-entries" id="log-entries">
+        <div style="color:var(--text-muted);font-size:.78rem;padding:8px">No activity yet.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Node cards -->
+  <div class="section-title">Cluster Nodes — click a card to target it</div>
+  <div class="ctrl-nodes" id="ctrl-nodes">
+    <div style="color:var(--text-muted);font-size:.84rem">Discovering nodes…</div>
+  </div>
+
+</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  // ── Base URL ────────────────────────────────────────────────────────────────
+  let BASE = localStorage.getItem("kv-base") || `${location.protocol}//${location.host}`;
+
+  function initNodeUrl() { document.getElementById("node-url-input").value = BASE; }
+
+  function switchNode() {
+    const val = document.getElementById("node-url-input").value.trim().replace(/\/$/, "");
+    if (!val) return;
+    BASE = val;
+    localStorage.setItem("kv-base", BASE);
+    allKeys = []; cachedValues = {}; selectedKey = null;
+    document.getElementById("get-detail").classList.remove("open");
+    refresh();
+  }
+
+  // ── Page routing ────────────────────────────────────────────────────────────
+  const PAGES = {
+    "#":          "page-dashboard",
+    "#dashboard": "page-dashboard",
+    "#write":     "page-write",
+    "#read":      "page-read",
+    "#get":       "page-get",
+    "#add":       "page-add",
+    "#control":   "page-control",
+  };
+  const NAV_IDS = {
+    "page-dashboard": "nav-dashboard",
+    "page-write":     "nav-write",
+    "page-read":      "nav-read",
+    "page-get":       "nav-get",
+    "page-add":       "nav-add",
+    "page-control":   "nav-control",
+  };
+
+  let currentPage = "";
+
+  function navigate(hash) {
+    const h = hash || location.hash || "#";
+    const target = PAGES[h] || PAGES["#"];
+
+    if (hash && hash !== location.hash)
+      history.pushState(null, "", h === "#" ? location.pathname : h);
+
+    if (target === currentPage) return;
+
+    document.querySelectorAll("[id^='page-']").forEach(el => el.style.display = "none");
+    document.getElementById(target).style.display = "";
+
+    document.querySelectorAll(".page-nav button").forEach(b => b.classList.remove("active"));
+    const btnId = NAV_IDS[target];
+    if (btnId) document.getElementById(btnId).classList.add("active");
+
+    currentPage = target;
+
+    clearAnimTimers();
+    if (target === "page-write")   setTimeout(() => startAnim("write"), 300);
+    if (target === "page-read")    setTimeout(() => startAnim("read"),  300);
+    if (target === "page-get")     fetchKeys();
+    if (target === "page-control") initControlPage();
+  }
+
+  window.addEventListener("popstate", () => navigate());
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  let allKeys = [];
+  let cachedValues = {};
+  let selectedKey = null;
+  let clusterData = null;
+  let stressRunning = false;
+  let editingKey = null; // key being edited on #add page
+
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  async function init() {
+    initNodeUrl();
+    navigate();
+    await refresh();
+    setInterval(refresh, 5000);
+  }
+
+  async function refresh() {
+    await Promise.all([fetchStats(), fetchCluster(), fetchQuorum(), fetchKeys()]);
+  }
+
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  async function fetchStats() {
+    try {
+      const [h, s] = await Promise.all([
+        fetch(`${BASE}/health`).then(r => r.json()),
+        fetch(`${BASE}/stats`).then(r => r.json()),
+      ]);
+      document.getElementById("status-dot").className = "dot online";
+      document.getElementById("node-label").textContent = `Node ${h.node_id}`;
+      document.getElementById("stat-status").textContent = "Online";
+      document.getElementById("stat-status").style.color = "var(--success)";
+      document.getElementById("stat-keys").textContent = s.keys.toLocaleString();
+      document.getElementById("stat-lsn").textContent = s.wal_lsn.toLocaleString();
+    } catch {
+      document.getElementById("status-dot").className = "dot offline";
+      document.getElementById("node-label").textContent = "Offline";
+      document.getElementById("stat-status").textContent = "Offline";
+      document.getElementById("stat-status").style.color = "var(--danger)";
+    }
+  }
+
+  // ── Clear WAL (snapshot + purge) ───────────────────────────────────────────
+  async function clearWAL() {
+    try {
+      document.getElementById("stat-lsn").textContent = "…";
+      await fetch(`${BASE}/snapshot`, { method: "POST" });
+      await fetchStats();
+      toast("WAL compacted — old segments purged", "ok");
+    } catch (e) {
+      toast(`Error: ${e.message}`, "err");
+      await fetchStats();
+    }
+  }
+
+  // ── Cluster ────────────────────────────────────────────────────────────────
+  async function fetchCluster() {
+    try {
+      clusterData = await fetch(`${BASE}/cluster`).then(r => r.json());
+      renderCluster();
+    } catch { /* ignore */ }
+  }
+
+  function renderCluster() {
+    if (!clusterData) return;
+    const { node_id, tcp_port, peers, quorum } = clusterData;
+    const thisNode = { node_id, address: `localhost:${tcp_port}`, http_url: BASE, alive: true, current: true };
+    const peerNodes = peers.map((p, i) => ({
+      node_id: `peer ${i + 1}`, address: p.address,
+      http_url: `http://${p.host}:${p.http_port}`, alive: p.alive, current: false,
+    }));
+    const all = [thisNode, ...peerNodes];
+    const online = all.filter(n => n.alive).length;
+    document.getElementById("stat-nodes").textContent = `${online} / ${all.length}`;
+    document.getElementById("stat-nodes").style.color =
+      online === all.length ? "var(--success)" : online > all.length / 2 ? "var(--warn)" : "var(--danger)";
+
+    document.getElementById("cluster-grid").innerHTML = all.map(n => `
+      <a class="node-card ${n.current ? 'current' : ''}" href="${n.http_url}" target="_blank"
+         onclick="${n.current ? 'return false' : ''}" title="${n.current ? 'This node' : n.address}">
+        ${n.current ? '<span class="this-badge">this node</span>' : ''}
+        <div class="node-card-id">Node ${n.node_id}</div>
+        <div class="node-card-addr">${escHtml(n.address)}</div>
+        <div class="node-status">
+          <span class="dot ${n.alive ? 'online' : 'offline'}"></span>
+          <span style="color:${n.alive ? 'var(--success)' : 'var(--danger)'}">
+            ${n.alive ? 'Online' : 'Offline'}
+          </span>
+        </div>
+        ${n.current ? `
+          <div class="quorum-row">
+            <div class="qb"><span class="qb-val">${quorum.replication_factor}</span><span class="qb-lbl">N</span></div>
+            <div class="qb"><span class="qb-val">${quorum.write_quorum}</span><span class="qb-lbl">W</span></div>
+            <div class="qb"><span class="qb-val">${quorum.read_quorum}</span><span class="qb-lbl">R</span></div>
+          </div>` : ''}
+      </a>`).join("");
+  }
+
+  // ── Quorum ─────────────────────────────────────────────────────────────────
+  async function fetchQuorum() {
+    try {
+      const q = await fetch(`${BASE}/quorum`).then(r => r.json());
+      document.getElementById("q-n").textContent = q.replication_factor;
+      document.getElementById("q-w").value = q.write_quorum;
+      document.getElementById("q-r").value = q.read_quorum;
+    } catch { /* ignore */ }
+  }
+
+  async function applyQuorum() {
+    const n = parseInt(document.getElementById("q-n").textContent) || 0;
+    const w = parseInt(document.getElementById("q-w").value) || 0;
+    const r = parseInt(document.getElementById("q-r").value) || 0;
+    const status = document.getElementById("q-status");
+    if (w < 1 || r < 1) { status.textContent = "W and R must be ≥ 1"; status.style.color = "var(--danger)"; return; }
+    if (r + w <= n) { status.textContent = `R(${r}) + W(${w}) must be > N(${n})`; status.style.color = "var(--danger)"; return; }
+    try {
+      const res = await fetch(`${BASE}/quorum`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ write_quorum: w, read_quorum: r }),
+      });
+      const data = await res.json();
+      if (!res.ok) { status.textContent = data.error; status.style.color = "var(--danger)"; return; }
+      status.textContent = `Applied — W=${data.write_quorum} R=${data.read_quorum}`;
+      status.style.color = "var(--success)";
+      setTimeout(() => { status.textContent = "R + W > N guarantees consistency"; status.style.color = "var(--text-muted)"; }, 3000);
+      await fetchCluster();
+    } catch (e) { status.textContent = `Error: ${e.message}`; status.style.color = "var(--danger)"; }
+  }
+
+  // ── Keys (shared state, rendered on #get page) ─────────────────────────────
+  async function fetchKeys() {
+    try {
+      const data = await fetch(`${BASE}/keys`).then(r => r.json());
+      const keySet = new Set(data.keys || []);
+      for (const k of Object.keys(cachedValues)) if (!keySet.has(k)) delete cachedValues[k];
+      allKeys = data.keys || [];
+      renderTable();
+    } catch { /* ignore */ }
+  }
+
+  function renderTable() {
+    if (currentPage !== "page-get") return;
+    const q = (document.getElementById("search")?.value || "").toLowerCase();
+    const filtered = allKeys.filter(k => k.toLowerCase().includes(q));
+    const tbody = document.getElementById("tbody");
+    if (!tbody) return;
+    if (!filtered.length) {
+      tbody.innerHTML = `<tr><td colspan="3"><div class="empty">${q ? "No keys match." : "No keys yet — add one!"}</div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = filtered.map(k => {
+      const preview = cachedValues[k] !== undefined
+        ? escHtml(cachedValues[k].substring(0, 80)) + (cachedValues[k].length > 80 ? "…" : "")
+        : `<span style="color:var(--border)">click to load</span>`;
+      const hl = k === selectedKey ? "style='background:var(--surface2)'" : "";
+      return `<tr ${hl}>
+        <td class="key-cell" onclick="selectKey('${escAttr(k)}')" style="cursor:pointer">${escHtml(k)}</td>
+        <td class="val-cell"  onclick="selectKey('${escAttr(k)}')" style="cursor:pointer">${preview}</td>
+        <td class="actions">
+          <button class="btn-ghost btn-sm" onclick="goEditKeyDirect('${escAttr(k)}')">Edit</button>
+          <button class="btn-danger btn-sm" onclick="deleteKey('${escAttr(k)}')">Delete</button>
+        </td>
+      </tr>`;
+    }).join("");
+  }
+
+  async function selectKey(key) {
+    selectedKey = key;
+    if (cachedValues[key] === undefined) {
+      const data = await fetch(`${BASE}/kv?key=${encodeURIComponent(key)}`).then(r => r.json());
+      cachedValues[key] = data.value ?? "(deleted — tombstone)";
+    }
+    document.getElementById("get-detail-key").textContent = key;
+    document.getElementById("get-detail-val").textContent = cachedValues[key];
+    document.getElementById("get-detail").classList.add("open");
+    renderTable();
+  }
+
+  // Navigate to #add with currently selected key
+  function goEditKey() {
+    if (selectedKey) goEditKeyDirect(selectedKey);
+  }
+
+  async function goEditKeyDirect(key) {
+    if (cachedValues[key] === undefined) {
+      const data = await fetch(`${BASE}/kv?key=${encodeURIComponent(key)}`).then(r => r.json());
+      cachedValues[key] = data.value ?? "";
+    }
+    editingKey = key;
+    document.getElementById("add-page-title").textContent = "Edit Key";
+    document.getElementById("add-page-subtitle").textContent = `Editing: ${key}`;
+    document.getElementById("add-editing-badge").style.display = "inline-flex";
+    document.getElementById("add-form-wrap").classList.add("add-form-editing");
+    document.getElementById("add-key").value = key;
+    document.getElementById("add-key").disabled = true;
+    document.getElementById("add-val").value = cachedValues[key];
+    document.getElementById("add-status").textContent = "";
+    navigate("#add");
+    setTimeout(() => document.getElementById("add-val").focus(), 100);
+  }
+
+  function resetAddForm() {
+    editingKey = null;
+    document.getElementById("add-page-title").textContent = "Add Key";
+    document.getElementById("add-page-subtitle").textContent = "Write a new key-value pair to the cluster";
+    document.getElementById("add-editing-badge").style.display = "none";
+    document.getElementById("add-form-wrap").classList.remove("add-form-editing");
+    document.getElementById("add-key").value = "";
+    document.getElementById("add-key").disabled = false;
+    document.getElementById("add-val").value = "";
+    document.getElementById("add-status").textContent = "";
+    document.getElementById("add-key").focus();
+  }
+
+  async function saveAddKey() {
+    const key   = document.getElementById("add-key").value.trim();
+    const value = document.getElementById("add-val").value;
+    const status = document.getElementById("add-status");
+    if (!key) { status.textContent = "Key cannot be empty"; status.style.color = "var(--danger)"; return; }
+    try {
+      const res = await fetch(`${BASE}/kv`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      cachedValues[key] = value;
+      toast(`Saved "${key}"`, "ok");
+      status.textContent = `✓ Saved at ${new Date().toLocaleTimeString()}`;
+      status.style.color = "var(--success)";
+      if (!editingKey) {
+        // clear for next entry
+        document.getElementById("add-key").value = "";
+        document.getElementById("add-val").value = "";
+        document.getElementById("add-key").focus();
+      }
+      await fetchKeys();
+    } catch (e) { status.textContent = `Error: ${e.message}`; status.style.color = "var(--danger)"; }
+  }
+
+  async function deleteKey(key) {
+    if (!confirm(`Delete "${key}"?`)) return;
+    try {
+      await fetch(`${BASE}/kv?key=${encodeURIComponent(key)}`, { method: "DELETE" });
+      delete cachedValues[key];
+      if (selectedKey === key) {
+        selectedKey = null;
+        document.getElementById("get-detail").classList.remove("open");
+      }
+      toast(`Deleted "${key}"`, "ok");
+      await fetchKeys();
+    } catch (e) { toast(`Error: ${e.message}`, "err"); }
+  }
+
+  // ── Flow animation ─────────────────────────────────────────────────────────
+  const FLOW_STEPS = {
+    write: {
+      boxes:   ["aw-0","aw-1","aw-2","aw-3","aw-4","aw-5"],
+      packets: ["awp-0","awp-1","awp-2","awp-3","awp-4"],
+      labels:  ["Client sends PUT","WAL: fsync to disk","MemTable: RAM update","Replicating to peers…","Quorum achieved ✓","Response sent to client ✓"],
+      statusEl: "anim-write-status",
+    },
+    read: {
+      boxes:   ["ar-0","ar-1","ar-2","ar-3","ar-4","ar-5"],
+      packets: ["arp-0","arp-1","arp-2","arp-3","arp-4"],
+      labels:  ["Client sends GET","Local MemTable lookup","Sending to peers in parallel","Quorum responses collected","Highest HLC wins","Value returned to client ✓"],
+      statusEl: "anim-read-status",
+    },
+  };
+
+  let animTimers = [];
+  function clearAnimTimers() { animTimers.forEach(clearTimeout); animTimers = []; }
+
+  function resetAnim(cfg) {
+    cfg.boxes.forEach(id => document.getElementById(id)?.classList.remove("lit"));
+    cfg.packets.forEach(id => { document.getElementById(id)?.classList.remove("fly"); });
+    const el = document.getElementById(cfg.statusEl);
+    if (el) el.textContent = "";
+  }
+
+  function startAnim(name) {
+    clearAnimTimers();
+    const cfg = FLOW_STEPS[name];
+    if (!cfg) return;
+    resetAnim(cfg);
+    const STEP = 540, TRAVEL = 360;
+    cfg.boxes.forEach((boxId, i) => {
+      animTimers.push(setTimeout(() => {
+        if (i > 0) document.getElementById(cfg.boxes[i - 1])?.classList.remove("lit");
+        document.getElementById(boxId)?.classList.add("lit");
+        const statusEl = document.getElementById(cfg.statusEl);
+        if (statusEl) statusEl.textContent = cfg.labels[i];
+        if (i < cfg.packets.length) {
+          const pkt = document.getElementById(cfg.packets[i]);
+          if (pkt) {
+            animTimers.push(setTimeout(() => {
+              pkt.classList.add("fly");
+              animTimers.push(setTimeout(() => {
+                pkt.style.transition = "none";
+                pkt.classList.remove("fly");
+                requestAnimationFrame(() => requestAnimationFrame(() => { pkt.style.transition = ""; }));
+              }, TRAVEL + 50));
+            }, STEP * 0.45));
+          }
+        }
+        if (i === cfg.boxes.length - 1) {
+          animTimers.push(setTimeout(() => {
+            resetAnim(cfg);
+            animTimers.push(setTimeout(() => startAnim(name), 500));
+          }, STEP + 900));
+        }
+      }, i * STEP));
+    });
+  }
+
+  // ── Stress Test ────────────────────────────────────────────────────────────
+  function pct(arr, p) {
+    if (!arr.length) return 0;
+    const s = [...arr].sort((a, b) => a - b);
+    return s[Math.min(Math.floor(s.length * p / 100), s.length - 1)];
+  }
+  function ms(v) { return (v * 1000).toFixed(1) + " ms"; }
+
+  async function runBatch(tasks, concurrency) {
+    const results = []; let i = 0;
+    async function worker() { while (i < tasks.length) { const idx = i++; results[idx] = await tasks[idx](); } }
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    return results;
+  }
+
+  async function runStressTest() {
+    if (stressRunning) return;
+    stressRunning = true;
+    document.getElementById("st-run-btn").disabled = true;
+    const n = Math.max(1, parseInt(document.getElementById("st-keys").value) || 1000);
+    const conc = Math.max(1, Math.min(100, parseInt(document.getElementById("st-conc").value) || 20));
+    const prefix = `stress-${Date.now()}`;
+    const keys = Array.from({ length: n }, (_, i) => `${prefix}-${String(i).padStart(7, "0")}`);
+    const values = Object.fromEntries(keys.map(k => [k, `val-${k}-${"x".repeat(16)}`]));
+    const setBar = p => document.getElementById("st-bar").style.width = `${p}%`;
+    const setLog = t => document.getElementById("stress-log").textContent = t;
+    const setPhase = t => document.getElementById("st-phase").textContent = t;
+    setBar(0); setLog("Starting…");
+
+    setPhase(`Writing ${n.toLocaleString()} keys…`);
+    const writeLats = []; let writeErrs = 0, done = 0;
+    const writeStart = performance.now();
+    await runBatch(keys.map(k => async () => {
+      const t0 = performance.now();
+      try { if (!(await fetch(`${BASE}/kv`, { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({key:k,value:values[k]}) })).ok) writeErrs++; }
+      catch { writeErrs++; }
+      writeLats.push((performance.now() - t0) / 1000);
+      if (++done % Math.max(1, Math.floor(n / 40)) === 0) {
+        setBar(done * 50 / n);
+        setLog(`Wrote ${done.toLocaleString()} / ${n.toLocaleString()} — ${(done/((performance.now()-writeStart)/1000)).toFixed(0)} ops/s`);
+      }
+    }), conc);
+    const writeTime = (performance.now() - writeStart) / 1000;
+
+    setPhase(`Reading ${n.toLocaleString()} keys back…`);
+    const readLats = []; let readErrs = 0, mismatches = 0; done = 0;
+    const readStart = performance.now();
+    await runBatch(keys.map(k => async () => {
+      const t0 = performance.now();
+      try { const d = await (await fetch(`${BASE}/kv?key=${encodeURIComponent(k)}`)).json(); if (d.value !== values[k]) mismatches++; }
+      catch { readErrs++; }
+      readLats.push((performance.now() - t0) / 1000);
+      if (++done % Math.max(1, Math.floor(n / 40)) === 0) {
+        setBar(50 + done * 50 / n);
+        setLog(`Read ${done.toLocaleString()} / ${n.toLocaleString()} — ${(done/((performance.now()-readStart)/1000)).toFixed(0)} ops/s`);
+      }
+    }), conc);
+    const readTime = (performance.now() - readStart) / 1000;
+
+    setBar(100); setPhase("Complete");
+    setLog(`Done — ${n.toLocaleString()} keys.${mismatches ? ` ⚠ ${mismatches} mismatches` : " ✓ All match"}`);
+    document.getElementById("result-tbody").innerHTML = `
+      <tr><td>Throughput</td><td class="val">${(n/writeTime).toFixed(0)} ops/s</td><td class="val">${(n/readTime).toFixed(0)} ops/s</td></tr>
+      <tr><td>Total time</td><td class="val">${writeTime.toFixed(2)} s</td><td class="val">${readTime.toFixed(2)} s</td></tr>
+      <tr><td>p50</td><td class="val">${ms(pct(writeLats,50))}</td><td class="val">${ms(pct(readLats,50))}</td></tr>
+      <tr><td>p95</td><td class="val">${ms(pct(writeLats,95))}</td><td class="val">${ms(pct(readLats,95))}</td></tr>
+      <tr><td>p99</td><td class="val">${ms(pct(writeLats,99))}</td><td class="val">${ms(pct(readLats,99))}</td></tr>
+      <tr><td>Errors</td><td class="val" style="color:${writeErrs?'var(--danger)':'var(--success)'}">${writeErrs}</td><td class="val" style="color:${readErrs?'var(--danger)':'var(--success)'}">${readErrs}</td></tr>
+      <tr><td>Mismatches</td><td colspan="2" class="val" style="color:${mismatches?'var(--danger)':'var(--success)'}">${mismatches||"✓ none"}</td></tr>
+    `;
+    await fetchStats(); await fetchKeys();
+    stressRunning = false;
+    document.getElementById("st-run-btn").disabled = false;
+  }
+
+  async function clearStressKeys() {
+    const stressKeys = allKeys.filter(k => k.startsWith("stress-"));
+    if (!stressKeys.length) { toast("No stress keys found", "err"); return; }
+    if (!confirm(`Delete ${stressKeys.length} stress keys?`)) return;
+    await Promise.all(stressKeys.map(k => fetch(`${BASE}/kv?key=${encodeURIComponent(k)}`, { method: "DELETE" })));
+    toast(`Deleted ${stressKeys.length} stress keys`, "ok");
+    await refresh();
+  }
+
+  // ── Keyboard ───────────────────────────────────────────────────────────────
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      document.getElementById("get-detail").classList.remove("open");
+      selectedKey = null;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      if (currentPage === "page-add") saveAddKey();
+    }
+    if (e.key === "Enter" && e.target === document.getElementById("node-url-input")) switchNode();
+  });
+
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  let toastTimer;
+  function toast(msg, type = "ok") {
+    const el = document.getElementById("toast");
+    el.textContent = msg; el.className = `show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.className = "", 2800);
+  }
+
+  // ── Control page ────────────────────────────────────────────────────────────
+  let ctrlNodes = [];        // [{nodeId, httpUrl, tcpPort, httpPort, alive, keys, lsn}]
+  let ctrlOp    = "GET";
+  let ctrlLog   = [];        // log entries
+  let ctrlSelectedUrl = "";  // currently targeted node URL
+  let ctrlPollTimer = null;
+
+  async function initControlPage() {
+    await discoverCtrlNodes();
+    if (ctrlPollTimer) clearInterval(ctrlPollTimer);
+    ctrlPollTimer = setInterval(pollCtrlNodes, 2000);
+  }
+
+  async function discoverCtrlNodes() {
+    try {
+      const cluster = await fetch(`${BASE}/cluster`, { signal: AbortSignal.timeout(2000) }).then(r => r.json());
+      const all = [
+        { nodeId: cluster.node_id, httpUrl: BASE, tcpPort: cluster.tcp_port, httpPort: cluster.http_port },
+        ...cluster.peers.map(p => ({
+          nodeId: p.node_id ?? "?",
+          httpUrl: `http://${p.host}:${p.http_port}`,
+          tcpPort: p.port,
+          httpPort: p.http_port,
+        }))
+      ];
+      // Merge with existing to preserve alive state
+      ctrlNodes = all.map(n => {
+        const existing = ctrlNodes.find(e => e.httpUrl === n.httpUrl);
+        return { ...n, alive: existing?.alive ?? false, keys: existing?.keys ?? null, lsn: existing?.lsn ?? null };
+      });
+      localStorage.setItem("kv-ctrl-nodes", JSON.stringify(all));
+    } catch {
+      const cached = localStorage.getItem("kv-ctrl-nodes");
+      if (cached && ctrlNodes.length === 0) {
+        ctrlNodes = JSON.parse(cached).map(n => ({ ...n, alive: false, keys: null, lsn: null }));
+      }
+    }
+    await pollCtrlNodes();
+  }
+
+  async function pollCtrlNodes() {
+    if (currentPage !== "page-control") return;
+    await Promise.all(ctrlNodes.map(async node => {
+      try {
+        const [h, s] = await Promise.all([
+          fetch(`${node.httpUrl}/health`, { signal: AbortSignal.timeout(900) }).then(r => r.json()),
+          fetch(`${node.httpUrl}/stats`,  { signal: AbortSignal.timeout(900) }).then(r => r.json()),
+        ]);
+        node.alive = true;
+        node.nodeId = h.node_id;
+        node.keys = s.keys;
+        node.lsn = s.wal_lsn;
+        if (s.data_dir) node.dataDir = s.data_dir;
+      } catch {
+        node.alive = false;
+        node.keys = null;
+        node.lsn = null;
+      }
+    }));
+    // Auto-select first alive node if none selected or selected is dead
+    const selNode = ctrlNodes.find(n => n.httpUrl === ctrlSelectedUrl);
+    if (!selNode || !selNode.alive) {
+      const first = ctrlNodes.find(n => n.alive);
+      ctrlSelectedUrl = first ? first.httpUrl : (ctrlNodes[0]?.httpUrl || "");
+    }
+    renderCtrlBanner();
+    renderCtrlNodes();
+    renderNodeSelector();
+  }
+
+  function renderCtrlBanner() {
+    const online = ctrlNodes.filter(n => n.alive).length;
+    const total  = ctrlNodes.length;
+    const quorum = Math.floor(total / 2) + 1;
+    document.getElementById("cb-nodes").textContent = `${online} / ${total}`;
+    document.getElementById("cb-n").textContent = total || "—";
+    document.getElementById("cb-w").textContent = total ? quorum : "—";
+    document.getElementById("cb-r").textContent = total ? quorum : "—";
+    const sel = ctrlNodes.find(n => n.httpUrl === ctrlSelectedUrl);
+    document.getElementById("cb-keys").textContent = sel?.keys ?? "—";
+    const alert = document.getElementById("cb-alert");
+    if (online === 0) {
+      alert.textContent = "✕ All nodes down"; alert.className = "ctrl-banner-alert err";
+    } else if (online < quorum) {
+      alert.textContent = `⚠ Below quorum (need ${quorum})`; alert.className = "ctrl-banner-alert warn";
+    } else if (online < total) {
+      alert.textContent = `⚠ ${total - online} node(s) down`; alert.className = "ctrl-banner-alert warn";
+    } else {
+      alert.textContent = "● Cluster healthy"; alert.className = "ctrl-banner-alert ok";
+    }
+  }
+
+  function renderCtrlNodes() {
+    const container = document.getElementById("ctrl-nodes");
+    if (!ctrlNodes.length) {
+      container.innerHTML = `<div style="color:var(--text-muted);font-size:.84rem">No nodes discovered yet.</div>`;
+      return;
+    }
+    container.innerHTML = ctrlNodes.map(n => {
+      const isSelected = n.httpUrl === ctrlSelectedUrl;
+      const basePort = n.tcpPort;
+      const restartCmd = `/tmp/kv_venv/bin/python3 -m src --node-id ${n.nodeId} --port ${basePort} --http-port ${n.httpPort} --data-dir /tmp/kvcluster --peers ${ctrlNodes.filter(p => p.httpUrl !== n.httpUrl).map(p => `localhost:${p.tcpPort}`).join(",")}`;
+
+      return `<div class="ctrl-node-card ${n.alive ? 'alive' : 'dead'} ${isSelected ? 'selected' : ''}"
+                   onclick="selectCtrlNode('${escAttr(n.httpUrl)}')">
+        <div class="cn-header">
+          <span class="dot ${n.alive ? 'online' : 'offline'}"></span>
+          <span class="cn-id">Node ${n.nodeId}</span>
+          <span class="cn-status-text ${n.alive ? 'alive' : 'dead'}">${n.alive ? 'ONLINE' : 'DEAD'}</span>
+          ${isSelected ? '<span style="font-size:.65rem;color:var(--accent);font-weight:700;margin-left:6px">● SELECTED</span>' : ''}
+        </div>
+        <div class="cn-url">${escHtml(n.httpUrl)}</div>
+        <div class="cn-stats">
+          <div class="cn-stat">
+            <div class="cn-stat-val" style="color:${n.alive ? 'var(--accent)' : 'var(--border)'}">
+              ${n.keys !== null ? n.keys.toLocaleString() : '—'}
+            </div>
+            <div class="cn-stat-lbl">Keys</div>
+          </div>
+          <div class="cn-stat">
+            <div class="cn-stat-val" style="color:${n.alive ? 'var(--text)' : 'var(--border)'}">
+              ${n.lsn !== null ? n.lsn.toLocaleString() : '—'}
+            </div>
+            <div class="cn-stat-lbl">WAL LSN</div>
+          </div>
+        </div>
+        <div class="cn-actions">
+          ${n.alive
+            ? `<button class="btn-ghost btn-sm" onclick="selectCtrlNode('${escAttr(n.httpUrl)}');event.stopPropagation()"
+                 style="${isSelected ? 'color:var(--accent);border-color:var(--accent)' : ''}">
+                 ${isSelected ? '✓ Targeted' : 'Target'}
+               </button>
+               <button class="btn-danger btn-sm" onclick="killNode('${escAttr(n.httpUrl)}');event.stopPropagation()">
+                 ✕ Kill Node
+               </button>`
+            : `<button class="btn-ghost btn-sm" style="cursor:default;opacity:.4" disabled>Offline</button>`
+          }
+        </div>
+        ${!n.alive ? `
+          <div class="cn-restart-box">
+            <button class="btn-primary btn-sm" style="width:100%;margin-bottom:8px"
+              onclick="restartNode('${escAttr(n.httpUrl)}');event.stopPropagation()">
+              ▶ Restart Node
+            </button>
+            <div style="font-size:.68rem;color:var(--text-muted);margin-bottom:3px">Or run manually:</div>
+            <div class="cn-restart-cmd">${escHtml(restartCmd)}</div>
+            <button class="btn-ghost btn-sm" style="margin-top:6px;font-size:.68rem"
+              onclick="navigator.clipboard?.writeText('${escAttr(restartCmd)}');toast('Copied!','ok');event.stopPropagation()">
+              Copy command
+            </button>
+          </div>` : ''}
+      </div>`;
+    }).join("");
+  }
+
+  function renderNodeSelector() {
+    const sel = document.getElementById("op-node");
+    if (!sel) return;
+    const prev = sel.value || ctrlSelectedUrl;
+    sel.innerHTML = ctrlNodes
+      .filter(n => n.alive)
+      .map(n => `<option value="${escAttr(n.httpUrl)}" ${n.httpUrl === prev ? 'selected' : ''}>
+        Node ${n.nodeId}  (${n.httpUrl.replace('http://', '')})
+      </option>`)
+      .join("") || `<option value="">No nodes online</option>`;
+    if (!sel.value && ctrlSelectedUrl) sel.value = ctrlSelectedUrl;
+  }
+
+  function selectCtrlNode(url) {
+    ctrlSelectedUrl = url;
+    renderCtrlNodes();
+    renderNodeSelector();
+    // update op-node select
+    const sel = document.getElementById("op-node");
+    if (sel) sel.value = url;
+  }
+
+  function setOp(op) {
+    ctrlOp = op;
+    document.querySelectorAll(".op-tab").forEach(t => {
+      t.classList.toggle("active", t.dataset.op === op);
+    });
+    const valInput = document.getElementById("op-val");
+    if (valInput) valInput.style.display = op === "PUT" ? "" : "none";
+  }
+
+  async function executeOp() {
+    const key     = document.getElementById("op-key").value.trim();
+    const val     = document.getElementById("op-val").value;
+    const nodeUrl = document.getElementById("op-node").value;
+    const resultBox = document.getElementById("op-result");
+    const meta    = document.getElementById("op-meta");
+    const badge   = document.getElementById("op-badge");
+    const latEl   = document.getElementById("op-latency");
+    const nodeEl  = document.getElementById("op-node-label");
+
+    if (!key) { resultBox.textContent = "⚠ Key cannot be empty."; resultBox.className = "op-result-box err"; return; }
+    if (!nodeUrl) { resultBox.textContent = "⚠ No online nodes available."; resultBox.className = "op-result-box err"; return; }
+
+    const node = ctrlNodes.find(n => n.httpUrl === nodeUrl);
+    const nodeName = node ? `Node ${node.nodeId}` : nodeUrl;
+    resultBox.textContent = `Sending ${ctrlOp} to ${nodeName}…`;
+    resultBox.className = "op-result-box";
+    meta.style.display = "none";
+
+    const t0 = performance.now();
+    let result, ok, status;
+    try {
+      let res;
+      if (ctrlOp === "GET") {
+        res = await fetch(`${nodeUrl}/kv?key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(5000) });
+      } else if (ctrlOp === "PUT") {
+        res = await fetch(`${nodeUrl}/kv`, {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, value: val }),
+          signal: AbortSignal.timeout(5000),
+        });
+      } else {
+        res = await fetch(`${nodeUrl}/kv?key=${encodeURIComponent(key)}`, {
+          method: "DELETE", signal: AbortSignal.timeout(5000),
+        });
+      }
+      result = await res.json();
+      ok = res.ok;
+      status = res.status;
+    } catch (e) {
+      result = { error: e.message };
+      ok = false;
+      status = 0;
+    }
+    const latency = (performance.now() - t0).toFixed(0);
+
+    resultBox.textContent = JSON.stringify(result, null, 2);
+    resultBox.className = `op-result-box ${ok ? 'ok' : 'err'}`;
+    meta.style.display = "flex";
+    badge.textContent = ok ? `✓ ${status}` : `✕ ${status || "ERR"}`;
+    badge.className = `op-badge ${ok ? 'ok' : 'err'}`;
+    latEl.textContent = `${latency} ms`;
+    nodeEl.textContent = `via ${nodeName}`;
+
+    addLogEntry({ op: ctrlOp, key, value: val, nodeName, ok, status, result, latency });
+  }
+
+  async function killNode(httpUrl) {
+    const node = ctrlNodes.find(n => n.httpUrl === httpUrl);
+    const name = `Node ${node?.nodeId ?? "?"}`;
+    if (!confirm(`Kill ${name}?\n\nThe process will exit immediately. Data is durable on disk — it will recover when restarted.`)) return;
+
+    try {
+      await fetch(`${httpUrl}/admin/kill`, { method: "POST", signal: AbortSignal.timeout(2000) });
+    } catch { /* expected — node dies before full response */ }
+
+    addLogEntry({ op: "KILL", key: name, nodeName: name, ok: false, status: null, result: { status: "process killed" }, latency: 0 });
+    toast(`${name} killed`, "err");
+
+    // Poll immediately to reflect dead state
+    setTimeout(() => pollCtrlNodes(), 600);
+  }
+
+  async function restartNode(deadUrl) {
+    const dead = ctrlNodes.find(n => n.httpUrl === deadUrl);
+    if (!dead) return;
+    const name = `Node ${dead.nodeId}`;
+
+    const relay = ctrlNodes.find(n => n.alive);
+    if (!relay) { toast("No alive nodes to relay spawn request", "err"); return; }
+
+    const peers = ctrlNodes
+      .filter(n => n.httpUrl !== deadUrl)
+      .map(n => `localhost:${n.tcpPort}`)
+      .join(",");
+
+    // Show restarting state on card
+    const card = [...document.querySelectorAll(".ctrl-node-card")]
+      .find(el => el.querySelector(".cn-url")?.textContent.trim() === dead.httpUrl);
+    const btn = card?.querySelector(".btn-primary");
+    if (btn) { btn.disabled = true; btn.textContent = "Starting…"; }
+
+    try {
+      const res = await fetch(`${relay.httpUrl}/admin/spawn`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          node_id:   dead.nodeId,
+          tcp_port:  dead.tcpPort,
+          http_port: dead.httpPort,
+          data_dir:  dead.dataDir || relay.dataDir || "/tmp/kvcluster",
+          peers,
+          log_level: "WARNING",
+        }),
+        signal: AbortSignal.timeout(4000),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      addLogEntry({ op: "INFO", key: name, nodeName: `via Node ${relay.nodeId}`, ok: true, status: 200, result: data, latency: 0 });
+      toast(`${name} spawned — waiting for it to come up…`, "ok");
+
+      // Poll until the node is alive (max 10s)
+      let attempts = 0;
+      const wait = setInterval(async () => {
+        await pollCtrlNodes();
+        const node = ctrlNodes.find(n => n.httpUrl === deadUrl);
+        if (node?.alive || ++attempts >= 10) {
+          clearInterval(wait);
+          if (node?.alive) toast(`${name} is back online ✓`, "ok");
+          else toast(`${name} did not respond in time`, "err");
+        }
+      }, 1000);
+    } catch (e) {
+      toast(`Spawn failed: ${e.message}`, "err");
+      if (btn) { btn.disabled = false; btn.textContent = "▶ Restart Node"; }
+    }
+  }
+
+  function addLogEntry({ op, key, value, nodeName, ok, status, result, latency }) {
+    const time = new Date().toLocaleTimeString("en", { hour12: false });
+    ctrlLog.unshift({ op, key, value, nodeName, ok, status, result, latency, time });
+    if (ctrlLog.length > 60) ctrlLog.length = 60;
+    renderLog();
+  }
+
+  function renderLog() {
+    const container = document.getElementById("log-entries");
+    if (!container) return;
+    if (!ctrlLog.length) {
+      container.innerHTML = `<div style="color:var(--text-muted);font-size:.78rem;padding:8px">No activity yet.</div>`;
+      return;
+    }
+    container.innerHTML = ctrlLog.map(e => {
+      const cls = e.op === "KILL" ? "kill" : e.op === "INFO" ? "info" : e.ok ? "ok" : "err";
+      const icon = e.op === "KILL" ? "✕" : e.op === "INFO" ? "↺" : e.ok ? "✓" : "✕";
+      let detail = "";
+      if (e.op === "GET" && e.ok && e.result?.value !== undefined) {
+        detail = ` = "${String(e.result.value).substring(0, 24)}${String(e.result.value).length > 24 ? '…' : ''}"`;
+      } else if (e.op === "PUT" && e.ok) {
+        detail = ` ← "${String(e.value || "").substring(0, 20)}"`;
+      } else if (!e.ok && e.result?.error) {
+        detail = ` [${String(e.result.error).substring(0, 30)}]`;
+      }
+      return `<div class="log-entry ${cls}">
+        <span class="log-time">${e.time}</span>
+        <span class="log-op ${e.op}">${e.op}</span>
+        <span class="log-key">${escHtml(e.key)}${escHtml(detail)}</span>
+        <span class="log-node">${escHtml(e.nodeName)}</span>
+        <span class="log-status">${icon}</span>
+      </div>`;
+    }).join("");
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+  function escAttr(s) { return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'"); }
+
+  init();
+</script>
+</body>
+</html>
