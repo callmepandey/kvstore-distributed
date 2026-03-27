@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+  node0:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: kvstore-node0
+    environment:
+      - NODE_ID=0
+      - PEERS=kvstore-node1:7000,kvstore-node2:7000
+      - LISTEN_PORT=7000
+      - HTTP_PORT=8000
+      - ANTI_ENTROPY_INTERVAL=10
+      - LOG_LEVEL=INFO
+    ports:
+      - "7000:7000"
+      - "8000:8000"
+    volumes:
+      - node0-data:/data
+    networks:
+      - kvstore-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  node1:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: kvstore-node1
+    environment:
+      - NODE_ID=1
+      - PEERS=kvstore-node0:7000,kvstore-node2:7000
+      - LISTEN_PORT=7000
+      - HTTP_PORT=8000
+      - ANTI_ENTROPY_INTERVAL=10
+      - LOG_LEVEL=INFO
+    ports:
+      - "7001:7000"
+      - "8001:8000"
+    volumes:
+      - node1-data:/data
+    networks:
+      - kvstore-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  node2:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: kvstore-node2
+    environment:
+      - NODE_ID=2
+      - PEERS=kvstore-node0:7000,kvstore-node1:7000
+      - LISTEN_PORT=7000
+      - HTTP_PORT=8000
+      - ANTI_ENTROPY_INTERVAL=10
+      - LOG_LEVEL=INFO
+    ports:
+      - "7002:7000"
+      - "8002:8000"
+    volumes:
+      - node2-data:/data
+    networks:
+      - kvstore-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  frontend:
+    image: nginx:alpine
+    container_name: kvstore-frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ../ui:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - kvstore-net
+    depends_on:
+      node0:
+        condition: service_healthy
+
+volumes:
+  node0-data:
+  node1-data:
+  node2-data:
+
+networks:
+  kvstore-net:
+    driver: bridge
