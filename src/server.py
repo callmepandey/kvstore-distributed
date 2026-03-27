@@ -91,17 +91,19 @@ class KVHTTPHandler(BaseHTTPRequestHandler):
         if parsed.path == "/cluster":
             config = self.server.store.config
             peers_status = []
-            for peer in config.peers:
+            for i, peer in enumerate(config.peers):
                 parts = peer.rsplit(":", 1)
                 host = parts[0]
                 tcp_port = int(parts[1]) if len(parts) > 1 else config.listen_port
-                # HTTP port is tcp_port + 1000 by server convention
                 inferred_http_port = tcp_port + 1000
+                public_urls = self.server.peer_public_urls
+                http_url = public_urls[i] if i < len(public_urls) else None
                 peers_status.append({
                     "address": peer,
                     "host": host,
                     "port": tcp_port,
                     "http_port": inferred_http_port,
+                    "http_url": http_url,
                     "alive": _check_peer_alive(host, tcp_port),
                 })
             self._json_response(200, {
@@ -293,9 +295,10 @@ class KVHTTPServer(ThreadingMixIn, HTTPServer):
 
     daemon_threads = True  # background threads die with the main thread
 
-    def __init__(self, addr: tuple[str, int], store: KVStore, http_port: int) -> None:
+    def __init__(self, addr: tuple[str, int], store: KVStore, http_port: int, peer_public_urls: list[str] | None = None) -> None:
         self.store = store
         self.http_port = http_port
+        self.peer_public_urls = peer_public_urls or []
         super().__init__(addr, KVHTTPHandler)
 
 
@@ -370,8 +373,11 @@ def run(argv: list[str] | None = None) -> None:
     store = KVStore(config)
     store.start()
 
+    # Public peer URLs for dashboard (e.g. on Fly.io where .internal is not browser-accessible)
+    peer_public_urls = [u.strip() for u in os.environ.get("PEER_PUBLIC_URLS", "").split(",") if u.strip()]
+
     # HTTP API
-    http_server = KVHTTPServer(("0.0.0.0", http_port), store, http_port)
+    http_server = KVHTTPServer(("0.0.0.0", http_port), store, http_port, peer_public_urls)
     http_thread = threading.Thread(target=http_server.serve_forever, daemon=True)
     http_thread.start()
     logger.info("HTTP API on port %d", http_port)

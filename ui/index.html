@@ -954,7 +954,7 @@
     const thisNode = { node_id, address: `localhost:${tcp_port}`, http_url: BASE, alive: true, current: true };
     const peerNodes = peers.map((p, i) => ({
       node_id: `peer ${i + 1}`, address: p.address,
-      http_url: `http://${p.host}:${p.http_port}`, alive: p.alive, current: false,
+      http_url: p.http_url || `http://${p.host}:${p.http_port}`, alive: p.alive, current: false,
     }));
     const all = [thisNode, ...peerNodes];
     const online = all.filter(n => n.alive).length;
@@ -1324,7 +1324,7 @@
         { nodeId: cluster.node_id, httpUrl: BASE, tcpPort: cluster.tcp_port, httpPort: cluster.http_port },
         ...cluster.peers.map(p => ({
           nodeId: p.node_id ?? "?",
-          httpUrl: `http://${p.host}:${p.http_port}`,
+          httpUrl: p.http_url || `http://${p.host}:${p.http_port}`,
           tcpPort: p.port,
           httpPort: p.http_port,
         }))

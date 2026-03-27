@@ -12,6 +12,7 @@ primary_region = "sin"
   ANTI_ENTROPY_INTERVAL = "10"
   LOG_LEVEL = "INFO"
   DATA_DIR = "/data"
+  PEER_PUBLIC_URLS = "https://kvstore-node0.fly.dev,https://kvstore-node1.fly.dev"
 
 [[mounts]]
   source = "node2_data"
