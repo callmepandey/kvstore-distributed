@@ -1,0 +1,30 @@
+app = "kvstore-node1"
+primary_region = "sin"
+
+[build]
+  dockerfile = "docker/Dockerfile"
+
+[env]
+  NODE_ID = "1"
+  PEERS = "kvstore-node0.internal:7000,kvstore-node2.internal:7000"
+  LISTEN_PORT = "7000"
+  HTTP_PORT = "8000"
+  ANTI_ENTROPY_INTERVAL = "10"
+  LOG_LEVEL = "INFO"
+  DATA_DIR = "/data"
+
+[[mounts]]
+  source = "node1_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

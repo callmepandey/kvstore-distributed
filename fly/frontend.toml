@@ -1,0 +1,21 @@
+app = "kvstore-frontend"
+primary_region = "sin"
+
+[build]
+  image = "nginx:alpine"
+
+[[mounts]]
+  source = "frontend_ui"
+  destination = "/usr/share/nginx/html"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
