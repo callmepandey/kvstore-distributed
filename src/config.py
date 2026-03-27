@@ -39,7 +39,7 @@ class Config:
     tombstone_gc_grace_seconds: int = 86400  # 24 hours
 
     # Transport
-    listen_host: str = "0.0.0.0"
+    listen_host: str = "::"
     listen_port: int = 7000
     replication_timeout_seconds: float = 5.0
     read_timeout_seconds: float = 5.0

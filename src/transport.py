@@ -48,8 +48,9 @@ class TCPTransport:
 
     def start(self) -> None:
         """Start the TCP server in a background thread."""
-        self._server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._server_sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         self._server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._server_sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
         self._server_sock.bind((self._host, self._port))
         self._server_sock.listen(64)
         self._server_sock.setblocking(False)
